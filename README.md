@@ -4,7 +4,7 @@
 
 > 🎰 一款零依赖、单文件（HTML+CSS+JS）的「抽取机 / 老虎机」小工具：支持**多语言**（中文/English/Русский）、**Base64 内嵌资源**（LOGO / BGM / SFX）、**可点击的泡泡特效**、**可复制结果**、以及**性能友好**的视觉下滚转盘动画。
 > ✅ **开箱即用**：把 `html` 放在任意静态环境直接打开/部署即可
-![系预览](html.png)
+![预览](html.png)
 ---
 
 ## 本地运行
@@ -43,7 +43,7 @@
 
 > 🎰 A zero-dependency, single-file (HTML+CSS+JS) “picker / slot machine” utility: supports **multiple languages** (中文/English/Русский), **Base64-embedded assets** (LOGO / BGM / SFX), **clickable bubble effects**, **copyable results**, and a **performance-friendly** visual downward-scrolling reel animation.
 > ✅ **Works out of the box**: just put `html` on any static host and open/deploy it.
-
+![预览](html.png)
 ---
 
 ## Run locally
@@ -82,7 +82,7 @@
 
 > 🎰 Небольшой инструмент «лототрон / слот-машина» **без зависимостей**, в **одном файле** (HTML+CSS+JS): поддерживает **многоязычный интерфейс** (中文/English/Русский), **встроенные в Base64 ресурсы** (LOGO / BGM / SFX), **кликабельные пузырьки**, **копирование результата**, а также **дружественную к производительности** анимацию визуального прокручивания барабанов вниз.
 > ✅ **Готов из коробки**: поместите `html` в любой статический хостинг и просто откройте/разверните.
-
+![预览](html.png)
 ---
 
 ## Запуск локально
