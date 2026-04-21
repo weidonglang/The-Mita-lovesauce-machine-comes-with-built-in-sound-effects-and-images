@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>爱心酱抽取机 </title>
+  <style>
+    /* ===== 基础与主题 ===== */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root{
+      --bg1:#ff7a18; --bg2:#ffb55a; --bg3:#2f4858; --text:#fff;
+      --shadow:0 20px 60px rgba(0,0,0,.25);
+      --muted:#ffffffa8; --cell:64px; --reel-w:86px;
+      --accent:#ffe071; --accent2:#39d6c8;
+
+      /* ▼ 纹理层参数 */
+       --logo-mark-url: url('data:image/png;base64,PASTE_YOUR_BASE64_HERE');
+      --pat-opacity: .14;
+      --pat-size-lg: 100px;
+      --pat-size-sm: 20px;
+      --pat-dot: 12px;
+      --pat-offset: calc(var(--pat-size-sm) / 2);
+    }
+
+    html,body{height:100%}
+    body{
+      margin:0;
+      min-height:100svh;
+      display:flex; align-items:center; justify-content:center;
+      color:var(--text);
+      background:
+        radial-gradient(circle at 16% 12%, #ffffff42 0 7%, transparent 20%),
+        radial-gradient(circle at 84% 88%, #39d6c852 0 9%, transparent 24%),
+        linear-gradient(135deg,var(--bg1),var(--bg2) 52%, var(--bg3)) fixed;
+      overflow-x:hidden;
+      font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    }
+
+    /* ===== 层级：pattern(0) < bubbles(1) < card(2) ===== */
+    #bgpattern{
+      position:fixed; inset:0; z-index:0; pointer-events:none;
+      background-image:
+        radial-gradient(#ffffff24 1px, transparent 1.6px), /* 点阵网格（柔和） */
+        var(--logo-url),                                  /* 大 LOGO 暗纹 */
+        var(--logo-url);                                  /* 小 LOGO 暗纹（偏移交错） */
+      background-size:
+        var(--pat-dot) var(--pat-dot),
+        var(--pat-size-lg) var(--pat-size-lg),
+        var(--pat-size-sm) var(--pat-size-sm);
+      background-repeat: repeat, repeat, repeat;
+      background-position:
+        0 0,
+        0 0,
+        var(--pat-offset) var(--pat-offset);
+      background-attachment: fixed, fixed, fixed; /* 桌面端固定在视口 */
+      opacity: var(--pat-opacity);
+      mix-blend-mode: multiply;
+    }
+
+    /* 移动端和降低动效用户：降级 attachment，保性能稳定 */
+    @media (hover:none) and (pointer:coarse){
+      #bgpattern{ background-attachment: initial, initial, initial; }
+    }
+    @media (prefers-reduced-motion: reduce){
+      #bgpattern{ background-attachment: initial, initial, initial; }
+    }
+
+    #bgfx{ position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden }
+    .wrap{
+      width:100%; min-height:100svh;
+      display:flex; align-items:center; justify-content:center;
+      padding:24px; position:relative; z-index:2; /* 卡片最上层 */
+    }
+
+    /* ===== 背景气泡 ===== */
+    .bubble{ position:absolute; will-change:transform; animation:floatUp linear forwards; }
+    @keyframes floatUp{ to{ transform: translateY(-120vh); } } /* 上浮不渐隐 */
+
+    .bubble .shell{
+      position:absolute; inset:0; border-radius:999px;
+      background:
+        radial-gradient(120px 120px at 30% 30%, #fff8, #fff2 40%, #fff0 70%),
+        radial-gradient(circle at 70% 70%, #fff2, #fff0 60%),
+        radial-gradient(circle at 50% 50%, #ffffff24, #ffffff05 60%, #0000 75%),
+        conic-gradient(from 180deg, #fff0, #ffffff18, #fff0 25%);
+      box-shadow: inset 0 0 30px #ffffff1f, 0 10px 40px #00000055;
+      border:1px solid #ffffff66;
+    }
+    .bubble .logo{ position:absolute; inset:0; display:grid; place-items:center; }
+    .bubble .logo img{ width:55%; height:55%; border-radius:999px; animation: spin 1.6s linear infinite; }
+    @keyframes spin{ to{ transform: rotate(360deg) } }
+
+    .bubble.pop{ animation-play-state: paused }
+    .bubble.pop .shell{ animation: shell-pop .12s ease-out forwards }
+    @keyframes shell-pop{ from{ opacity:1; transform: scale(1) } to{ opacity:0; transform: scale(1.08) } }
+    .bubble.pop .logo{ animation: logo-after .65s ease-out forwards }
+    @keyframes logo-after{ 0%{ transform: scale(1) rotate(0deg) } 100%{ transform: scale(1.5) rotate(420deg) } }
+
+    /* ===== 卡片 ===== */
+.card{
+  margin:0 auto; width:min(820px, 100%);
+  max-height:calc(100svh - 48px); overflow:auto;
+  backdrop-filter: blur(10px) saturate(1.2);
+  background:linear-gradient(180deg,#ffffff26,#00000010);
+  border:1px solid #ffffff33; border-radius:18px;
+  padding:24px 24px 18px; box-shadow:var(--shadow);
+  position:relative; isolation:isolate;
+}
+
+.hdr{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px }
+.ttl{ display:flex; align-items:center; gap:10px }
+
+.logo-mark{
+  width:28px; height:28px; border-radius:8px;
+  background-image:var(--logo-url);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;               /* 等比完整显示小图 */
+  box-shadow: 0 0 0 1px #ffffff66 inset;  /* 可选：保留一点“描边感” */
+}
+
+h1{ font-size:22px; margin:0; letter-spacing:.06em }
+.controls{ display:flex; align-items:center; gap:8px; flex-wrap:wrap }
+.controls button{ border:1px solid #ffffff35; background:#ffffff1c; color:#fff; border-radius:10px; padding:6px 10px; cursor:pointer }
+.controls button:hover, .copy:hover, .mini:hover{ background:#ffffff30; border-color:#ffffff80 }
+.langbar button.active{ background:#ffffff38; border-color:#ffffffa6 }
+
+    /* 表单：自适应两列，不重叠 */
+    .row{ display:flex; flex-wrap:wrap; gap:14px; margin:12px 0 14px; }
+    .field{ display:flex; flex-direction:column; gap:6px; flex:1 1 260px; min-width:260px; }
+    label{ font-size:12px; color:var(--muted) }
+    input[type=number]{ width:100%; padding:12px 12px; border-radius:12px; border:1px solid #ffffff3a; color:#fff; background:#ffffff1b; outline:none; text-align:center; font-weight:600 }
+    input[type=number]:focus{ border-color:#fff }
+
+    /* ===== 老虎机（视觉向下滚，翻转法） ===== */
+    .reels{ display:flex; gap:12px; justify-content:center; margin:10px 0 8px }
+    .reel{ width:var(--reel-w); height:var(--cell); border-radius:12px; overflow:hidden; border:1px solid #ffffff33; background:linear-gradient(180deg,#0006,#0002); position:relative; transform: scaleY(-1) }
+    .strip{ will-change: transform }
+    .cell{ width:100%; height:var(--cell); display:grid; place-items:center; font-weight:800; font-size:28px; text-shadow:0 2px 6px #0008; transform: scaleY(-1) }
+    .reel::after{ content:""; position:absolute; inset:0; pointer-events:none; box-shadow: inset 0 10px 14px -10px #0008, inset 0 -10px 14px -10px #0008 }
+
+    .actions{ display:flex; gap:10px; margin:12px 0 12px }
+    .btn{ flex:1; padding:12px 14px; border:none; color:#331c09; background:linear-gradient(180deg,#fff0a5,#ff9f3f); border-radius:14px; font-weight:800; letter-spacing:.08em; cursor:pointer; box-shadow:0 12px 24px #0000002e; user-select:none }
+    .btn:active{ transform: translateY(1px) scale(.995) }
+    .btn[disabled]{ filter:grayscale(.7) brightness(.8); cursor:not-allowed }
+
+    .screen{ min-height:48px; border-radius:14px; background:linear-gradient(180deg,#0000002b,#ffffff12); border:1px solid #ffffff2e; display:flex; align-items:center; gap:8px; padding:10px 12px; overflow:auto }
+    .pill{ background:#00000052; border:1px solid #ffffff37; padding:6px 10px; border-radius:999px; font-weight:700 }
+
+    .sub{ display:flex; align-items:center; gap:10px; margin-top:12px }
+    .copy{ width:36px; height:36px; display:grid; place-items:center; border-radius:10px; border:1px solid #ffffff33; background:#ffffff1f; cursor:pointer }
+    .mini{ border:1px solid #ffffff33; background:#ffffff1f; color:#fff; border-radius:10px; padding:8px 10px; cursor:pointer }
+    .msg{ min-height:20px; margin-top:8px; font-size:12px; color:#fff; text-align:center }
+    .msg.warn{ color:#ffe0a3 }
+    .msg.error{ color:#ffd1dc }
+
+    .history{ margin-top:6px; border-radius:12px; border:1px solid #ffffff2e; background:#ffffff14; overflow:hidden }
+    .hist-head{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; font-size:13px }
+    details[open] .hist-head{ border-bottom:1px dashed #ffffff2a }
+    .hist-body{ padding:6px 12px 12px; max-height:180px; overflow:auto }
+    .hist-row{ display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #ffffff2a }
+    .hist-row:last-child{ border-bottom:none }
+
+    .tip{ font-size:12px; color:#ffffffcc; text-align:center; margin-top:10px }
+    @media (max-width:720px){
+      .wrap{ padding:12px; align-items:flex-start }
+      .card{ max-height:none; border-radius:14px; padding:16px }
+      .hdr{ align-items:flex-start }
+      .actions{ flex-wrap:wrap }
+      .btn{ flex-basis:100% }
+      .hist-row{ display:grid; grid-template-columns:1fr; gap:2px }
+    }
+    @media (max-width:420px){
+      :root{ --cell:58px; --reel-w:76px }
+      .field{ min-width:0; flex-basis:100% }
+      .reels{ overflow-x:auto; justify-content:flex-start; padding-bottom:4px }
+    }
+  </style>
+</head>
+<body>
+  <!-- ▼ 纹理层（在泡泡层之前，且更底） -->
+  <div id="bgpattern" aria-hidden="true"></div>
+  <!-- ▼ 泡泡特效层 -->
+  <div id="bgfx" aria-hidden="true"></div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="hdr">
+        <div class="ttl">
+          <div class="logo-mark"></div>
+          <h1 id="title">爱心酱抽取机</h1>
+        </div>
+        <div class="controls">
+          <div class="langbar" aria-label="language switcher">
+            <button data-lang="zh">中文</button>
+            <button data-lang="en">EN</button>
+            <button data-lang="ru">РУ</button>
+          </div>
+          <button id="bgToggle" title="背景音乐开关">🔈 <span data-i18n="music">音乐</span></button>
+          <button id="sfxToggle" title="音效开关">🔉 <span data-i18n="sfx">音效</span></button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label id="labelTotal">总数 (1 ~ N)</label>
+          <input id="total" type="number" min="1" max="999999999" value="350" />
+        </div>
+        <div class="field">
+          <label id="labelCount">抽取数量（列数）</label>
+          <input id="count" type="number" min="1" max="12" value="3" />
+        </div>
+      </div>
+
+      <div id="reels" class="reels" role="group" aria-label="老虎机转盘"></div>
+
+      <div class="actions">
+        <button id="drawBtn" class="btn">开始抽取</button>
+        <button id="clearHistBtn" class="mini" type="button">清空历史</button>
+      </div>
+
+      <div id="screen" class="screen" aria-live="polite"></div>
+      <div id="msg" class="msg" aria-live="polite"></div>
+
+      <div class="sub">
+        <div id="resultTitle" style="font-size:12px;color:#ffffffa8">抽取结果</div>
+        <div class="copy" id="copyBtn" title="复制结果">📋</div>
+      </div>
+
+      <details class="history" open>
+        <summary class="hist-head"><span id="histTitle">抽签历史</span><span id="histLatest" style="opacity:.75">（最新在上）</span></summary>
+        <div id="histBody" class="hist-body"></div>
+      </details>
+
+      <div class="tip">© 2025.10 · LANG版权所有</div>
+    </div>
+  </div>
+
+  <script>
+    /* ========= 语言包 ========= */
+    const I18N = {
+      zh: { title:'爱心酱抽取机', total:'总数 (1 ~ N)', count:'抽取数量（列数）', start:'开始抽取', drawing:'抽取中...', clear:'清空历史', result:'抽取结果', history:'抽签历史', latest:'（最新在上）', music:'音乐', sfx:'音效', copyTitle:'复制结果', copied:'已复制', copyFail:'复制失败，请手动选择结果', empty:'还没有结果', kTooLarge:'抽取数量不能大于总数，已自动调整', histCleared:'历史已清空', nth:'第 {n} 次' },
+      en: { title:'Aixin-chan Picker', total:'Total (1 ~ N)', count:'Draw count (columns)', start:'START', drawing:'Drawing...', clear:'Clear history', result:'Results', history:'History', latest:'(latest first)', music:'Music', sfx:'SFX', copyTitle:'Copy results', copied:'Copied', copyFail:'Copy failed. Select the result manually.', empty:'No result yet.', kTooLarge:'Draw count cannot exceed total. Adjusted automatically.', histCleared:'History cleared.', nth:'Round #{n}' },
+      ru: { title:'Aixin-chan Выбор', total:'Общее число (1 ~ N)', count:'Количество столбцов', start:'СТАРТ', drawing:'Выбор...', clear:'Очистить', result:'Результаты', history:'История', latest:'(новые сверху)', music:'Музыка', sfx:'Звук', copyTitle:'Копировать результаты', copied:'Скопировано', copyFail:'Не удалось скопировать.', empty:'Результатов пока нет.', kTooLarge:'Количество не может быть больше общего числа.', histCleared:'История очищена.', nth:'Раунд № {n}' }
+    };
+
+    function getAssets(){
+      try{
+        const el = document.getElementById('assets-json');
+        return el ? JSON.parse(el.textContent||'{}') : {};
+      }catch(e){ return {}; }
+    }
+
+    function asDataUrl(value, mime){
+      if(!value || typeof value !== 'string') return '';
+      const v = value.trim();
+      if(!v) return '';
+      return v.startsWith('data:') ? v : `data:${mime};base64,${v}`;
+    }
+
+    /* ========= 备用 LOGO ========= */
+    const DEFAULT_LOGO = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiB2aWV3Qm94PSIwIDAgMjU2IDI1NiI+PHBhdGggZmlsbD0iI2ZmNmEwMCIgZD0iTTEyOCAyNThBMTI4IDEyOCAwIDEgMCAxMjggMCIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQwLDUwKSI+PHBhdGggZD0iTTg4IDE0NyBMMCA1OSBDLTEyIDI3IDEyIDAgNDQgMCBjMTcgMCAzMyA5IDQ0IDI0IEM5OSA5IDExNSAwIDEzMiAwIGMzMiAwIDU2IDI3IDQ0IDU5IGwtODggODh6IiBmaWxsPSIjZmZmIi8+PC9nPjwvc3ZnPg==';
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const ASSETS = getAssets();
+
+      /* —— 将 Base64 LOGO 注入纹理变量 —— */
+      document.documentElement.style.setProperty(
+        '--logo-url',
+        `url("${ ((ASSETS && asDataUrl(ASSETS.logo, ASSETS.logoMime || 'image/png')) || DEFAULT_LOGO).replace(/"/g, '\\"') }")`
+      );
+
+      /* —— 语言初始化 —— */
+      let lang = 'zh';
+      function applyLang(){
+        const L = I18N[lang];
+        document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
+        document.title = L.title + '（Base64 资源尾部）';
+        const $ = s=>document.querySelector(s);
+        $('#title').textContent = L.title;
+        $('#labelTotal').textContent = L.total;
+        $('#labelCount').textContent = L.count;
+        $('#drawBtn').textContent = L.start;
+        $('#resultTitle').textContent = L.result;
+        $('#histTitle').textContent = L.history;
+        $('#histLatest').textContent = L.latest;
+        document.querySelector('#bgToggle span[data-i18n="music"]').textContent = L.music;
+        document.querySelector('#sfxToggle span[data-i18n="sfx"]').textContent = L.sfx;
+        document.getElementById('copyBtn').title = L.copyTitle;
+        document.getElementById('clearHistBtn').textContent = L.clear;
+        document.querySelectorAll('.langbar button').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
+      }
+
+      /* —— 元素与音频 —— */
+      const totalEl = document.getElementById('total');
+      const countEl = document.getElementById('count');
+      const drawBtn = document.getElementById('drawBtn');
+      const screen = document.getElementById('screen');
+      const copyBtn = document.getElementById('copyBtn');
+      const clearHistBtn = document.getElementById('clearHistBtn');
+      const msg = document.getElementById('msg');
+      const histBody = document.getElementById('histBody');
+      const reelsWrap = document.getElementById('reels');
+      const bgfx = document.getElementById('bgfx');
+
+      const logoSrc = (ASSETS && asDataUrl(ASSETS.logo, ASSETS.logoMime || 'image/png')) || DEFAULT_LOGO;
+      const bgmSrc = ASSETS && asDataUrl(ASSETS.bgm, ASSETS.bgmMime || 'audio/mpeg');
+      const popSrc = ASSETS && asDataUrl(ASSETS.pop || ASSETS.sfx, ASSETS.popMime || ASSETS.sfxMime || 'audio/mpeg');
+      const bgm = bgmSrc ? new Audio(bgmSrc) : null; if(bgm){ bgm.loop = true; bgm.volume = 0.3; }
+      const sfx = popSrc ? new Audio(popSrc) : null; if(sfx){ sfx.volume = 0.8; }
+      let bgmEnabled = false, sfxEnabled = true, hasInteracted = false;
+      function userGestureOnce(){ if(!hasInteracted){ hasInteracted = true; if(bgmEnabled && bgm){ bgm.play().catch(()=>{}); } } }
+
+      /* —— 工具 —— */
+      const clamp = (n,min,max)=>Math.max(min,Math.min(max,n));
+      function setMsg(text='', type=''){
+        msg.textContent = text;
+        msg.className = `msg ${type}`.trim();
+      }
+      function randPick(n,k){
+        if(k>n) throw new Error('k>N');
+        const picked = new Set();
+        while(picked.size < k){
+          picked.add(1 + Math.floor(Math.random() * n));
+        }
+        return [...picked].sort((a,b)=>a-b);
+      }
+      const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+      function setResults(nums){
+        screen.innerHTML='';
+        nums.forEach(n=>{ const el=document.createElement('span'); el.className='pill'; el.textContent=n; screen.appendChild(el);});
+      }
+      function addHistory(nums){
+        const row=document.createElement('div'); row.className='hist-row';
+        const t=new Date(); const L=I18N[lang];
+        const nth=L.nth.replace('{n}', String(document.querySelectorAll('.hist-row').length+1));
+        row.innerHTML=`<div>${nth}</div><div>${t.toLocaleString()}</div><div>${nums.join(', ')}</div>`;
+        histBody.prepend(row);
+      }
+
+      /* ========= 老虎机（虚拟循环：min(N,200) × 2） ========= */
+      const MAX_N_DOM = 2400;
+      function addCell(strip, n){ const cell=document.createElement('div'); cell.className='cell'; cell.textContent=n; strip.appendChild(cell); }
+
+      function buildReels(cols){
+        reelsWrap.innerHTML = '';
+        const Nraw = clamp(parseInt(totalEl.value||'0',10),1,999999999);
+        const Ndom = Math.min(Nraw, MAX_N_DOM);
+        for(let c=0;c<cols;c++){
+          const reel = document.createElement('div'); reel.className='reel';
+          const strip = document.createElement('div'); strip.className='strip';
+          for(let i=1;i<=Ndom;i++) addCell(strip, i);
+          for(let i=1;i<=Ndom;i++) addCell(strip, i);
+          strip.dataset.nraw = Nraw;
+          strip.dataset.ndom = Ndom;
+          reel.appendChild(strip);
+          reelsWrap.appendChild(reel);
+        }
+      }
+
+      function spinToTarget(strip, target, colIndex){
+        const cellH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 64;
+        const Ndom = parseInt(strip.dataset.ndom,10);
+        const cycle = Ndom * cellH;
+        const visibleIndex = ((target - 1) % Ndom);
+        const spins = 14 + colIndex*2;
+        const yEndRaw = -((spins * Ndom + visibleIndex) * cellH);
+        const duration = 1400 + colIndex*360;
+
+        return new Promise(resolve=>{
+          const t0 = performance.now();
+          function frame(now){
+            const t = Math.max(0, Math.min(1, (now - t0) / duration));
+            const yRaw = yEndRaw * easeOutCubic(t);
+            const y = - (Math.abs(yRaw) % cycle);
+            strip.style.transform = `translateY(${y}px)`;
+            if(t < 1){ requestAnimationFrame(frame); }
+            else{
+              const yStop = -visibleIndex * cellH;
+              strip.style.transform = `translateY(${yStop}px)`;
+              const cells = strip.children;
+              if(cells[visibleIndex]) cells[visibleIndex].textContent = target;
+              resolve();
+            }
+          }
+          requestAnimationFrame(frame);
+        });
+      }
+
+      /* ========= 泡泡（点击爆裂仅播音效；爆裂后停止上升） ========= */
+      function currentTranslateY(el){
+        const tr = getComputedStyle(el).transform;
+        if(!tr || tr === 'none') return 0;
+        if(tr.startsWith('matrix3d(')){ const v = tr.slice(9,-1).split(',').map(parseFloat); return v[13] || 0; }
+        if(tr.startsWith('matrix('))  { const v = tr.slice(7,-1).split(',').map(parseFloat); return v[5]  || 0; }
+        return 0;
+      }
+
+      function popBubble(b, { userTriggered = false } = {}) {
+        if (!b || b.dataset.popped === '1') return;
+        b.dataset.popped = '1';
+        if (b._popTimer)    { clearTimeout(b._popTimer); b._popTimer = null; }
+        if (b._removeTimer) { clearTimeout(b._removeTimer); b._removeTimer = null; }
+
+        const ty = currentTranslateY(b);
+        b.style.transform = `translateY(${ty}px)`;  /* 硬停在当前位置 */
+        b.style.animation = 'none';                 /* 停止上浮动画 */
+        b.classList.add('pop');                     /* 播放壳与 logo 动画 */
+
+        if (userTriggered && sfxEnabled && sfx) { try { sfx.currentTime = 0; sfx.play(); } catch (_) {} }
+        b._removeTimer = setTimeout(() => b.remove(), 700);
+      }
+
+      function spawnBubble({x=Math.random()*window.innerWidth, y=window.innerHeight+80, size=120+Math.random()*80, big=false}={}){
+        const b = document.createElement('div');
+        b.className = 'bubble';
+        b.style.width = b.style.height = size + 'px';
+        b.style.left = (x - size/2) + 'px';
+        b.style.top  = y + 'px';
+
+        const dur = 3.5 + Math.random()*2.8;  // 3.5s ~ 6.3s
+        b.style.animation = `floatUp ${dur}s linear forwards`;
+
+        const shell = document.createElement('div'); shell.className = 'shell';
+        const inner = document.createElement('div'); inner.className = 'logo';
+        const img = new Image(); img.src = logoSrc;
+        inner.appendChild(img);
+        b.appendChild(shell); b.appendChild(inner);
+        bgfx.appendChild(b);
+
+        /* 随机高度爆裂（不播音效） */
+        const frac  = 0.25 + Math.random()*0.55;
+        const popMs = frac * dur * 1000;
+        b._popTimer = setTimeout(() => { popBubble(b, { userTriggered:false }); }, popMs);
+
+        /* 兜底清理 */
+        b._removeTimer = setTimeout(() => { if (b && document.contains(b)) try{ b.remove(); }catch(_){ } }, (dur + 1) * 1000);
+      }
+
+      /* 点击命中检测：不改变层级也能点爆（仅点击播音效） */
+      document.addEventListener('pointerdown', (e)=>{
+        if (e.button && e.button !== 0) return;
+        if (e.target.closest('.card')) return;
+        const x = e.clientX, y = e.clientY;
+        const list = Array.from(document.querySelectorAll('#bgfx .bubble'));
+        for (let i=list.length-1; i>=0; i--){
+          const b = list[i];
+          if (!b || b.dataset.popped === '1') continue;
+          const r = b.getBoundingClientRect();
+          const cx = r.left + r.width/2, cy = r.top + r.height/2, rr = r.width/2;
+          const dx = x - cx, dy = y - cy;
+          if (dx*dx + dy*dy <= rr*rr) { popBubble(b, { userTriggered:true }); e.preventDefault(); break; }
+        }
+      }, { passive:false });
+
+      /* ========= 抽取主流程 ========= */
+      function burstCue(){ spawnBubble({x:window.innerWidth/2, y:window.innerHeight*0.62, size:220, big:true}); }
+
+      const setResultsUI = nums => { screen.innerHTML=''; nums.forEach(n=>{ const el=document.createElement('span'); el.className='pill'; el.textContent=n; screen.appendChild(el); }); };
+
+      drawBtn.addEventListener('click', async ()=>{
+        try{
+          userGestureOnce();
+          drawBtn.disabled = true; drawBtn.textContent = I18N[lang].drawing; setResultsUI([]); setMsg(''); burstCue();
+          const N = clamp(parseInt(totalEl.value||'0',10),1,999999999);
+          let K = clamp(parseInt(countEl.value||'0',10),1,12);
+          if(K > N){ K = N; countEl.value = K; setMsg(I18N[lang].kTooLarge, 'warn'); }
+          buildReels(K);
+          const results = randPick(N, K);
+          const strips = [...document.querySelectorAll('.strip')];
+          await Promise.all(strips.map((strip, i)=>spinToTarget(strip, results[i], i)));
+          if(sfxEnabled && sfx){ try{ sfx.currentTime=0; await sfx.play(); }catch(e){} }
+          setResults(results); addHistory(results);
+        }catch(err){ alert(err.message||err); }
+        finally{ drawBtn.disabled = false; drawBtn.textContent = I18N[lang].start; }
+      });
+
+      /* 复制结果 */
+      copyBtn.addEventListener('click', ()=>{
+        const L=I18N[lang];
+        const txt=[...screen.querySelectorAll('.pill')].map(x=>x.textContent).join(', ');
+        if(!txt){ setMsg(L.empty, 'warn'); return; }
+        const fallbackCopy = () => {
+          const area = document.createElement('textarea');
+          area.value = txt;
+          area.style.position = 'fixed';
+          area.style.left = '-9999px';
+          document.body.appendChild(area);
+          area.focus();
+          area.select();
+          const ok = document.execCommand('copy');
+          area.remove();
+          return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+        };
+        const job = navigator.clipboard && window.isSecureContext ? navigator.clipboard.writeText(txt) : fallbackCopy();
+        job.then(()=>{
+          copyBtn.textContent='✅'; copyBtn.title=L.copied;
+          setTimeout(()=>{ copyBtn.textContent='📋'; copyBtn.title=L.copyTitle; }, 900);
+        }).catch(()=>setMsg(L.copyFail, 'error'));
+      });
+
+      clearHistBtn.addEventListener('click', ()=>{
+        histBody.innerHTML = '';
+        setMsg(I18N[lang].histCleared);
+      });
+
+      /* 音乐/音效开关 */
+      const bgToggle = document.getElementById('bgToggle'); const sfxToggle = document.getElementById('sfxToggle');
+      if(!bgm){ bgToggle.disabled = true; bgToggle.style.opacity=.6; }
+      if(!sfx){ sfxToggle.disabled = true; sfxToggle.style.opacity=.6; }
+      bgToggle.addEventListener('click', async ()=>{ if(!bgm) return; bgmEnabled = !bgmEnabled; bgToggle.firstChild.textContent = bgmEnabled? '🔊 ' : '🔈 '; if(bgmEnabled){ try{ await bgm.play(); }catch(e){} } else { bgm.pause(); } });
+      sfxToggle.addEventListener('click', ()=>{ if(!sfx) return; sfxEnabled = !sfxEnabled; sfxToggle.firstChild.textContent = sfxEnabled? '🔉 ' : '🔇 '; });
+
+      /* 常驻泡泡：每 1.6s 生成一个 */
+      setInterval(()=>{ spawnBubble(); }, 1000);
+
+      /* 初始构建与语言切换 */
+      buildReels(parseInt(countEl.value,10));
+      countEl.addEventListener('change', ()=>buildReels(Math.max(1,Math.min(12,parseInt(countEl.value||'0',10)))));
+      document.querySelector('.langbar').addEventListener('click', (e)=>{ const l=e.target.getAttribute('data-lang'); if(!l) return; lang=l; applyLang(); });
+      applyLang();
+    });
+  </script>
+
+  <!-- ================================ -->
+  <!--  Base64 资源入口（集中维护）    -->
+  <!-- ================================ -->
+  <script id="assets-json" type="application/json">
+  {
+    "logoMime": "image/png",
+    "logo": "",
+    "bgmMime": "audio/mpeg",
+    "bgm": "",
+    "popMime": "audio/mpeg",
+    "pop": ""
+  }
+  </script>
+</body>
+</html>
